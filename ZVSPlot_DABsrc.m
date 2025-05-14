@@ -1,7 +1,7 @@
 function  ZVSPlot_DABsrc(r,Vo,Vin,Z0, plotoptions)
 
 % Define the grid for D_y and D_phi
-[Dy1, Dy2, Dp] = meshgrid(linspace(0, 1, 100), linspace(0, 1, 100), linspace(0, 1, 100));
+[Dy1, Dy2, Dp] = meshgrid(linspace(0, 1, 100), linspace(0, 1, 100), linspace(0, 0.5, 100));
 % % % DPS modulation
 % [Dy1, Dp] = meshgrid(linspace(0, 1, 100), linspace(0, 1, 100));
 % Dy2 = 0.8*Dy1;
@@ -226,7 +226,7 @@ switch plotoptions
     xlabel('$D_{y1}$', 'Interpreter', 'latex');
     ylabel('$D_{y2}$', 'Interpreter', 'latex');
     title('Full ZVS boundary of TPS DAB-SRC (colormap PoN)', 'Interpreter', 'latex');
-    xlim([0, 1]), ylim([0,1]),zlim([0, 1]);
+    xlim([0, 1]), ylim([0,1]),zlim([0, 0.5]);
     grid on;
 
     if (Vo/Vin<1)
@@ -275,7 +275,7 @@ switch plotoptions
     xlabel('$D_{y1}$', 'Interpreter', 'latex');
     ylabel('$D_{y2}$', 'Interpreter', 'latex');
     title('Full ZVS boundary of TPS DAB-SRC (colormap Irms)', 'Interpreter', 'latex');
-    xlim([0, 1]), ylim([0,1]),zlim([0, 1]);
+    xlim([0, 1]), ylim([0,1]),zlim([0, 0.5]);
     grid on;
     if (Vo/Vin<1)
         view([2 5 3]); % M<1

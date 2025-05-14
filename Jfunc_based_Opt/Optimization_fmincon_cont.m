@@ -1,6 +1,6 @@
 clc, close all;
 %% Define constants
-fs = 250e3; % switching frequency, user defined
+fs = 210*1.25e3; % switching frequency, user defined
 Lr = 12e-6; % resonant inductor, user defined
 Cr = 48e-9; % resonant capacitor, user defined
 Z0 = sqrt(Lr/Cr);
@@ -8,7 +8,7 @@ fr = 1/(2*pi*sqrt(Lr*Cr));
 r = fr/fs;
 
 Vin = 800; % input voltage, user defined
-Vo = 1200;  % output voltage, user defined
+Vo = 1600;  % output voltage, user defined
 
 % unused variables
 omega_r = 2*pi*fr;
@@ -20,193 +20,179 @@ Ioss = 0.06;
 
 % plot background ZVS figure
 handle = figure(3);
-plotoptions = 2;
-% r = 1/1.8;
-% ZVSPlot_DABsrc(r,Vo,Vin,Z0, plotoptions); hold on;
-% r = 1/1.5;
-% ZVSPlot_DABsrc(r,Vo,Vin,Z0, plotoptions); hold on;
-% r = 1/1.1;
-% ZVSPlot_DABsrc(r,Vo,Vin,Z0, plotoptions); hold on;
-% r = fs/fr;
+plotoptions = 1;
 ZVSPlot_DABsrc(r,Vo,Vin,Z0, plotoptions); hold on;
 
-% Define optimization problem options
-options = optimoptions('fmincon', 'Display', 'off');
-% options = optimoptions('fmincon', ...
-%     'OptimalityTolerance', 1e-6, ...  % improve convergence accurancy
-%     'FunctionTolerance', 1e-6, ...
-%     'StepTolerance', 1e-10, ...
-%     'ConstraintTolerance', 1e-9, ...
-%     'Display', 'off');  % 观察每次迭代结果
+%% Optimization problem
+% Define the power ranges 
+low_power_range = linspace(0.015, 0.45, 50);
+high_power_range = linspace(0.45, 1.1, 50);
+PoN_values = [low_power_range, high_power_range]; % Include both power ranges
+DoF = 4;
 
-%% low high power guess for mini Irms
+% Define different initial conditions for each region
+low_power_initial = [0.06, 0.7, 0.95, 1/1.1];  % Low power initial guess
+high_power_initial = [0.5, 1, 1, 1/1.2]; 
 
-% bounds = [0 0; 0.5 1];
-% DoF = 2; % Degree of freedom
-% initial_guess = [0.06, 0.7];  % Initial guess
-% % PoN_values = linspace(0.015, 0.45, 100);
-% PoN_values = linspace(0.015, 0.3, 100);
+% Define bounds for optimization variables based on DoF
+if DoF == 1
+    bounds = [0; 0.5];  % Lower and upper bounds for Dp
+elseif DoF == 2
+    bounds = [0 0; 0.5 1];  % Bounds for Dp, Dy1
+elseif DoF == 3
+    bounds = [0 0 0; 0.5 1 1];  % Bounds for Dp, Dy1, Dy2
+elseif DoF == 4
+    bounds = [0 0 0 1/1.25; 0.5 1 1 1/1.05];  % Bounds for Dp, Dy1, Dy2, r
+end
 
-% bounds = [0 0 0; 0.5 1 1]; % Lower and upper bounds
-% DoF = 3; % Degree of freedom
-% initial_guess = [0.06, 0.7, 0.95];  % Initial guess
-% PoN_values = linspace(0.015, 0.45, 100);
+% Prepare arrays with extra space
+total_points = length(PoN_values);
+optimal_points = zeros(total_points, DoF);
+optimal_power = zeros(total_points, 1);
+optimal_Irms = zeros(total_points, 1);
+Ioffp12 = zeros(total_points, 1);
+Ioffp34 = zeros(total_points, 1);
+Ioffs12 = zeros(total_points, 1);
+Ioffs34 = zeros(total_points, 1);
+ILmax = zeros(total_points, 1);
+actual_PoN_values = zeros(total_points, 1);
 
-% % M<1 (Ioff lambad=400) (Irms lambad=500)
-% bounds = [0 0 0 1/1.2; 0.5 1 1 1/1.05]; % Lower and upper bounds
-% DoF = 4; % Degree of freedom
-% initial_guess = [0.06, 0.7, 0.95, 1/1.1];  % Initial guess
-% % PoN_values = linspace(0.015, 0.3, 100);
-% PoN_values = linspace(0.33, 0.45, 100);
+% Update optimization options to increase iterations
+options = optimoptions('fmincon', ...
+    'Display', 'off', ...
+    'MaxIterations', 2000, ...  % Increase maximum iterations
+    'MaxFunctionEvaluations', 10000, ...  % Increase function evaluations
+    'OptimalityTolerance', 1e-8, ...
+    'StepTolerance', 1e-10);
 
-% % M>1 (Ioff lambad=400) (Irms lambad=500)
-% bounds = [0 0 0 1/1.2; 0.5 1 1 1/1.1]; % Lower and upper bounds
-% DoF = 4; % Degree of freedom
-% initial_guess = [0.06, 0.95, 0.7, 1/1.1];  % Initial guess
-% PoN_values = linspace(0.014, 0.3, 100);
+% 定义外部变量 identical_bun，用于控制连续相同点的数量
+identical_bun = 5; % 当连续相同点超过 4 时才跳变
 
-% % M=580/800, fs = 250e3 Irms lambad=1000
-% bounds = [0 0 0; 0.5 1 1];
-% DoF = 3; % Degree of freedom
-% initial_guess = [0.06, 0.7, 0.95];  % Initial guess
-% PoN_values = linspace(0.015, 0.45, 100);
+% 定义欧几里得距离的阈值
+distance_threshold = 0.1; % 两个点之间的最大允许距离
 
-%% meduim to high power guess for mini Irms
-% % TPS optimize ABE
-% bounds = [0 0 0; 0.5 1 1]; % Lower and upper bounds
-% DoF = 3; % Degree of freedom
-% initial_guess = [0.25, 1, 1];  % Initial guess
-% PoN_values = linspace(0.45, 1.2, 100);
+% 初始化计数器
+identical_count = 0;
 
-% % TPS optimize EFGH
-% bounds = [0 0 0; 1 1 1]; % Lower and upper bounds
-% DoF = 3; % Degree of freedom
-% initial_guess = [0.35, 1, 1];  % Initial guess
-% PoN_values = linspace(0.05, 1.2, 100);
-
-% % VFM+TPS optimize ABE lambda = 400
-% bounds = [0 0 0 1/1.2; 0.5 1 1 1/1.01]; % Lower and upper bounds
-% DoF = 4; % Degree of freedom
-% initial_guess = [0.25, 1, 1, 1/1.2];  % Initial guess
-% % initial_guess = [0.35, 1, 1, 1/1.15];  % Initial guess
-% PoN_values = linspace(0.45, 1.2, 100);
-
-%% meduim to high power guess for mini Ioff
-% bounds = [0 0 0; 0.5 1 1]; % Lower and upper bounds
-% DoF = 3; % Degree of freedom
-% initial_guess = [0.25, 1, 1];  % Initial guess
-% PoN_values = linspace(0.45, 1.2, 100);
-
-bounds = [0 0 0 1/1.2; 0.5 1 1 1/1.1]; % Lower and upper bounds
-DoF = 4; % Degree of freedom
-initial_guess = [0.5, 1, 1, 1/1.2];  % Initial guess
-PoN_values = linspace(0.45, 1.2, 100);
-
-%% all power guess
-% bounds = [0 0 0 1/1.2; 0.5 1 1 1]; % Lower and upper bounds
-% DoF = 4; % Degree of freedom
-% initial_guess = [0.06, 0.7, 0.95, 1/1.1];  % Initial guess
-% PoN_values = linspace(0.02, 1.1, 100);
-
-%% Run optimization for each PoN target value
-
-optimal_points = zeros(length(PoN_values), DoF);
-optimal_power = zeros(length(PoN_values), 1);
-optimal_Irms = zeros(length(PoN_values), 1);
-Ioffp12 = zeros(length(PoN_values), 1);
-Ioffp34 = zeros(length(PoN_values), 1);
-Ioffs12 = zeros(length(PoN_values), 1);
-Ioffs34 = zeros(length(PoN_values), 1);
-
+% For each power target
 for i = 1:length(PoN_values)
     PoN_target = PoN_values(i);
     
     % Define objective function with penalty
-    obj_fun = @(vars) J_function(DoF, vars, Vin, Vo, PoN_target);  % objective function now include PoN_target
+    obj_fun = @(vars) J_function(DoF, vars, Vin, Vo, PoN_target);
     
-    % Define nonlinear constraints, import iteration vars, Vin, Vo, Z0
+    % Define nonlinear constraints
     nonlcon = @(vars) zvs_function(DoF, vars, Vin, Vo, Z0);
     
-    % Run optimization
-    [optimal_vars, fval, exitflag, output] = fmincon(obj_fun, initial_guess, [], [], [], [], bounds(1,:), bounds(2,:), nonlcon, options);
-
-    % Store result
+    % Perform separate optimizations for low and high power initial guesses
+    [optimal_vars_low, fval_low, exitflag_low, ~] = fmincon(obj_fun, low_power_initial, [], [], [], [], bounds(1,:), bounds(2,:), nonlcon, options);
+    [optimal_vars_high, fval_high, exitflag_high, ~] = fmincon(obj_fun, high_power_initial, [], [], [], [], bounds(1,:), bounds(2,:), nonlcon, options);
+    
+    % Select the better result
+    if exitflag_low > 0 && exitflag_high > 0
+        if fval_low <= fval_high
+            optimal_vars = optimal_vars_low;
+            fval = fval_low;
+            exitflag = exitflag_low;
+            fprintf('✅ Optimization successful for PoN_target = %.4f (low power region selected)\n', PoN_target);
+        else
+            optimal_vars = optimal_vars_high;
+            fval = fval_high;
+            exitflag = exitflag_high;
+            fprintf('✅ Optimization successful for PoN_target = %.4f (high power region selected)\n', PoN_target);
+        end
+    elseif exitflag_low > 0
+        optimal_vars = optimal_vars_low;
+        fval = fval_low;
+        exitflag = exitflag_low;
+        fprintf('✅ Optimization successful for PoN_target = %.4f (low power region only)\n', PoN_target);
+    elseif exitflag_high > 0
+        optimal_vars = optimal_vars_high;
+        fval = fval_high;
+        exitflag = exitflag_high;
+        fprintf('✅ Optimization successful for PoN_target = %.4f (high power region only)\n', PoN_target);
+    else
+        warning('⚠️ Both optimizations did NOT converge for PoN_target = %.4f', PoN_target);
+        continue; % Skip to next iteration
+    end
+    
+    % 检查连续结果是否相同或距离是否过大
+    if i > 1
+        distance = norm(optimal_vars - optimal_points(i-1,:)); % 计算欧几里得距离
+        if isequal(optimal_vars, optimal_points(i-1,:)) || distance > distance_threshold
+            identical_count = identical_count + 1; % 增加计数器
+            if identical_count >= identical_bun
+                fprintf('⚠️ %d consecutive identical or distant results detected for PoN_target = %.4f. Switching to alternative solution.\n', identical_count, PoN_target);
+                if isequal(optimal_vars, optimal_vars_low)
+                    optimal_vars = optimal_vars_high;
+                    fval = fval_high;
+                    exitflag = exitflag_high;
+                else
+                    optimal_vars = optimal_vars_low;
+                    fval = fval_low;
+                    exitflag = exitflag_low;
+                end
+                identical_count = 0; % 重置计数器
+            end
+        else
+            identical_count = 0; % 如果结果不同且距离合理，重置计数器
+        end
+    end
+    
+    % Store results
     optimal_points(i,:) = optimal_vars;
     optimal_power(i,:) = f_function(DoF, optimal_vars, Vin, Vo);
     optimal_Irms(i,:) = g_function(DoF, optimal_vars, Vin, Vo);
-    [Ip12, Ip34, Is12, Is34, ILmax] = h_function(DoF, optimal_vars, Vin, Vo);
-    Ioffp12(i,:) = Ip12;
-    Ioffp34(i,:) = Ip34;
-    Ioffs12(i,:) = Is12;
-    Ioffs34(i,:) = Is34;
-    ILmax(i,:) = ILmax;
-    
-    % Update initial guess for next optimization
-    initial_guess = optimal_vars;
-    
-    % output virsialization and optimization status
-    if exitflag > 0
-        fprintf('✅ Optimization successful for PoN_target = %.4f. Final Cost: %.6f\n', PoN_target, fval);
-        if DoF >= 4
-            fprintf('Optimal Variables: Dp = %.6f, Dy1 = %.6f, Dy2 = %.6f\n, r = %.6f\n', optimal_vars(1), optimal_vars(2), optimal_vars(3), optimal_vars(4));
-        elseif DoF == 3
-            fprintf('Optimal Variables: Dp = %.6f, Dy1 = %.6f, Dy2 = %.6f\n', optimal_vars(1), optimal_vars(2), optimal_vars(3));
-        elseif DoF == 2
-            fprintf('Optimal Variables: Dp = %.6f, Dy1(Dy2) = %.6f\n', optimal_vars(1), optimal_vars(2));
-        else
-            fprintf('Optimal Variable: Dp = %.6f\n', optimal_vars(1));
-        end
-    else
-        warning('⚠️ Optimization did NOT converge for PoN_target = %.4f! Exit flag: %d\n', PoN_target, exitflag);
-        fprintf('Reason: %s\n', output.message);
-        if DoF >= 4
-            fprintf('Optimal Variables: Dp = %.6f, Dy1 = %.6f, Dy2 = %.6f\n, r = %.6f\n', optimal_vars(1), optimal_vars(2), optimal_vars(3), optimal_vars(4));
-        elseif DoF == 3
-            fprintf('Last Attempt Variables: Dp = %.6f, Dy1 = %.6f, Dy2 = %.6f\n', optimal_vars(1), optimal_vars(2), optimal_vars(3));
-        elseif DoF == 2
-            fprintf('Last Attempt Variables: Dp = %.6f, Dy1(Dy2) = %.6f\n', optimal_vars(1), optimal_vars(2));
-        else
-            fprintf('Last Attempt Variable: Dp = %.6f\n', optimal_vars(1));
-        end
-    end
+    [Ip12_val, Ip34_val, Is12_val, Is34_val, ILmax_val] = h_function(DoF, optimal_vars, Vin, Vo);
+    Ioffp12(i,:) = Ip12_val;
+    Ioffp34(i,:) = Ip34_val;
+    Ioffs12(i,:) = Is12_val;
+    Ioffs34(i,:) = Is34_val;
+    ILmax(i,:) = ILmax_val;
+    actual_PoN_values(i) = f_function(DoF, optimal_vars, Vin, Vo); % 使用 f_function 计算实际 PoN 值
 end
 
-figure(1)
-% plot(PoN_values, optimal_Irms, 'b-', 'LineWidth', 1); hold on;
-% ylabel('Normalized tank current Irms', 'Interpreter', 'latex');
-% title('Irms under different Power','Interpreter', 'latex');
+% Remove any uninitialized points (where optimization failed)
+valid_indices = actual_PoN_values ~= 0;
+optimal_points = optimal_points(valid_indices, :);
+optimal_power = optimal_power(valid_indices);
+optimal_Irms = optimal_Irms(valid_indices);
+Ioffp12 = Ioffp12(valid_indices);
+Ioffp34 = Ioffp34(valid_indices);
+Ioffs12 = Ioffs12(valid_indices);
+Ioffs34 = Ioffs34(valid_indices);
+ILmax = ILmax(valid_indices);
+actual_PoN_values = actual_PoN_values(valid_indices);
 
-plot(PoN_values, Ioffp12, 'r-', 'LineWidth', 1, 'DisplayName', 'I_{off,P12}'); hold on;
-plot(PoN_values, Ioffp34, 'b-', 'LineWidth', 1, 'DisplayName', 'I_{off,P34}'); hold on;
-plot(PoN_values, Ioffs12, 'm-', 'LineWidth', 1, 'DisplayName', 'I_{off,S12}'); hold on;
-plot(PoN_values, Ioffs34, 'c-', 'LineWidth', 1, 'DisplayName', 'I_{off,S34}'); hold on;
-plot(PoN_values, ILmax, 'k--', 'LineWidth', 1, 'DisplayName', 'I_{L,max}'); hold on;
+% Use actual PoN values for plotting
+figure(1)
+plot(actual_PoN_values, Ioffp12, 'r-', 'LineWidth', 1, 'DisplayName', 'I_{off,P12}'); hold on;
+plot(actual_PoN_values, Ioffp34, 'b-', 'LineWidth', 1, 'DisplayName', 'I_{off,P34}'); hold on;
+plot(actual_PoN_values, Ioffs12, 'm-', 'LineWidth', 1, 'DisplayName', 'I_{off,S12}'); hold on;
+plot(actual_PoN_values, Ioffs34, 'c-', 'LineWidth', 1, 'DisplayName', 'I_{off,S34}'); hold on;
+plot(actual_PoN_values, ILmax, 'k--', 'LineWidth', 1, 'DisplayName', 'I_{L,max}'); hold on;
 ylabel('Normalized turn-off current', 'Interpreter', 'latex');
 title('Ioff under different Power','Interpreter', 'latex');
-
 xlabel('Normalized output power PoN', 'Interpreter', 'latex');
-
 legend('show');
-% xlim([0 0.45]);
-% ylim([0 0.5]);
 grid on;
 
-
 figure(2)
-plot(PoN_values, optimal_points(:,1), 'k-', 'LineWidth', 1, 'DisplayName', 'Dp'); hold on;
-plot(PoN_values, optimal_points(:,2), 'r-', 'LineWidth', 1, 'DisplayName', 'Dy1'); hold on;
-plot(PoN_values, optimal_points(:,3), 'b-', 'LineWidth', 1, 'DisplayName', 'Dy2'); hold on;
+plot(actual_PoN_values, optimal_points(:,1), 'k-', 'LineWidth', 1, 'DisplayName', 'Dp'); hold on;
+plot(actual_PoN_values, optimal_points(:,2), 'r-', 'LineWidth', 1, 'DisplayName', 'Dy1'); hold on;
+plot(actual_PoN_values, optimal_points(:,3), 'b-', 'LineWidth', 1, 'DisplayName', 'Dy2'); hold on;
+if DoF >= 4
+    plot(actual_PoN_values, optimal_points(:,4), 'g-', 'LineWidth', 1, 'DisplayName', 'r'); hold on;
+end
 xlabel('Normalized output power PoN', 'Interpreter', 'latex');
 ylabel('Phase-shift ratios','Interpreter', 'latex');
 legend('show');
-% xlim([0 0.45]);
-% ylim([0 0.5]);
 grid on;
 
 figure(3)
 if DoF >= 3
     % Visualize results in 3D
-    scatter3(optimal_points(:,2), optimal_points(:,3), optimal_points(:,1), 10, 'red','filled'); % 50 is the point size
+    scatter3(optimal_points(:,2), optimal_points(:,3), optimal_points(:,1), 10, 'red','filled');
     hold on;
     plot3(optimal_points(:,2), optimal_points(:,3), optimal_points(:,1), 'red', 'LineWidth', 2);
     xlabel('Dy1');
@@ -243,47 +229,59 @@ end
 
 
 
-% Define Cost function with penalty for PoN_target
+% J_function
 function J = J_function(DoF, vars, Vin, Vo, PoN_target)
-
     % calculate PoN
     PoN = f_function(DoF, vars, Vin, Vo);
     % calculate Irms
     Irms = g_function(DoF, vars, Vin, Vo);
-    Ioff = h_function(DoF, vars, Vin, Vo);
+    % calculate Ioff (you can ignore the return value if not needed)
+    h_function(DoF, vars, Vin, Vo);
     
     % construct cost function
-    lambda = 500;  % add panelty coefficient (weight λ adjustable)
+    lambda = 800;  % add penalty coefficient (weight λ adjustable)
     penalty = lambda * (PoN - PoN_target)^2;
     
     % final cost function
     J = Irms + penalty;
 end
 
-% Define power function
-function f = f_function(DoF, vars, Vin, Vo)
 
-    % Dp = vars(1); Dy1 = vars(2); Dy2 = vars(3); r = 1/1.2;
+function [Dp, Dy1, Dy2, r] = assign_variables(DoF, vars, Vin, Vo)
+    % Default values
+    r = 1/1.2;
+    
+    % Assign based on DoF
     if DoF >= 1
-        Dp = vars(1); Dy1 = 1; Dy2 = 1; r = 1/1.2;
+        Dp = vars(1); Dy1 = 1; Dy2 = 1;
     end
+    
     if DoF >= 2
-        if (Vin>Vo)
+        if (Vin > Vo)
             Dy1 = vars(2);
             Dy2 = 1;
         else
             Dy1 = 1;
             Dy2 = vars(2);
         end
-        r = 1/1.2;
     end
+    
     if DoF >= 3
-        Dy1 = vars(2); Dy2 = vars(3); r = 1/1.2;
+        Dy1 = vars(2); Dy2 = vars(3);
     end
+    
     if DoF >= 4
         r = vars(4);
     end
+end
 
+
+% Define power function
+function f = f_function(DoF, vars, Vin, Vo)
+
+    % Get variables based on DoF
+    [Dp, Dy1, Dy2, r] = assign_variables(DoF, vars, Vin, Vo);
+    
     region_flag((Dy1>Dy2) & (Dp<(Dy1-Dy2)/2)) = 1;  %  A
     region_flag((Dy2>=Dy1) & (Dp<(Dy2-Dy1)/2)) = 2;  %  B
     region_flag((Dp>=abs(Dy1-Dy2)/2) & (Dp<(Dy2+Dy1)/2) & (Dp<(1-(Dy2+Dy1)/2))) = 3;  %  C
@@ -293,61 +291,31 @@ function f = f_function(DoF, vars, Vin, Vo)
     % region_flag(((1-(Dy1-Dy2)/2)<=Dp) & (Dy2<=Dy1)) = 7;  %  G
     % region_flag((Dp>=(1-(Dy1+Dy2)/2)) & (Dp>=(Dy1+Dy2)/2) & (Dp<(1-abs(Dy1-Dy2)/2))) = 8;  %  H
 
-    % Calculate f value
-    % switch region_flag
-    %     case 1
-    %         % Region A
-    %         f =  1/pi.*((sin(pi*r.*Dy2/2).*sin(pi*r.*Dp).*cos(pi*r.*(1-Dy1)/2))./(r.*cos(pi*r/2)));
-    %     case 2
-    %         % Region B
-    %         f = 1/pi.*((sin(pi*r.*Dy1/2).*sin(pi*r.*Dp).*cos(pi*r.*(1-Dy2)/2))./(r.*cos(pi*r/2)));
-    %     case 3
-    %         % Region C
-    %         f = 1/(2*pi).*(((cos(pi.*r.*(Dy2-Dy1)/2).*cos(pi.*r/2.*(2.*Dp-1)) + sin(pi.*r.*(Dy1+Dy2-1)/2).*sin(pi.*r.*(Dp)))./(r.*cos(pi.*r./2)) - 1./r));
-    %     case 4
-    %         % Region D
-    %         f = 1/pi.*(((sin(pi*r.*Dy1/2).*cos(pi*r.*(2*Dp-1)/2).*sin(pi*r.*Dy2/2))./(r.*cos(pi*r/2))));
-    %     case 5
-    %         % Region E
-    %         f = 1/pi.*((cos(pi.*r.*(Dp-0.5)).*cos(pi.*r.*(1-Dy1)./2).*cos(pi.*r.*(1-Dy2)./2))./(r.*cos(pi.*r./2))-1./(r));
-    %     % case 6
-    %     %     % Region F
-    %     %     f = 1/pi.*((sin(pi*r.*Dy1/2).*sin(pi*r.*(1-Dp)).*cos(pi*r.*(1-Dy2)/2))./(r.*cos(pi*r/2)));
-    %     % case 7
-    %     %     % Region G
-    %     %     f = 1/pi.*((sin(pi*r.*Dy2/2).*sin(pi*r.*(1-Dp)).*cos(pi*r.*(1-Dy1)/2))./(r.*cos(pi*r/2)));
-    %     % case 8
-    %     %     % Region H
-    %     %     f = 1/(2*pi).*(((cos(pi.*r.*(Dy2-Dy1)/2).*cos(pi.*r/2.*(2.*Dp-1)) + sin(pi.*r.*(Dy1+Dy2-1)/2).*sin(pi.*r.*(1-Dp)))./(r.*cos(pi.*r./2)) - 1./r));
-    %     otherwise
-    %         error('Unknown region');
-    % end
-
     switch region_flag
         case 1
             % Region A
-            f =  1/2.*((sin(pi*r.*Dy2/2).*sin(pi*r.*Dp).*cos(pi*r.*(1-Dy1)/2))./(r.*cos(pi*r/2)));
+            f =  1/(2*pi).*((sin(pi*r.*Dy2/2).*sin(pi*r.*Dp).*cos(pi*r.*(1-Dy1)/2))./(r.*cos(pi*r/2)));
         case 2
             % Region B
-            f = 1/2.*((sin(pi*r.*Dy1/2).*sin(pi*r.*Dp).*cos(pi*r.*(1-Dy2)/2))./(r.*cos(pi*r/2)));
+            f = 1/(2*pi).*((sin(pi*r.*Dy1/2).*sin(pi*r.*Dp).*cos(pi*r.*(1-Dy2)/2))./(r.*cos(pi*r/2)));
         case 3
             % Region C
-            f = 1/(4).*(((cos(pi.*r.*(Dy2-Dy1)/2).*cos(pi.*r/2.*(2.*Dp-1)) + sin(pi.*r.*(Dy1+Dy2-1)/2).*sin(pi.*r.*(Dp)))./(r.*cos(pi.*r./2)) - 1./r));
+            f = 1/(4*pi).*(((cos(pi.*r.*(Dy2-Dy1)/2).*cos(pi.*r/2.*(2.*Dp-1)) + sin(pi.*r.*(Dy1+Dy2-1)/2).*sin(pi.*r.*(Dp)))./(r.*cos(pi.*r./2)) - 1./r));
         case 4
             % Region D
-            f = 1/2.*(((sin(pi*r.*Dy1/2).*cos(pi*r.*(2*Dp-1)/2).*sin(pi*r.*Dy2/2))./(r.*cos(pi*r/2))));
+            f = 1/(2*pi).*(((sin(pi*r.*Dy1/2).*cos(pi*r.*(2*Dp-1)/2).*sin(pi*r.*Dy2/2))./(r.*cos(pi*r/2))));
         case 5
             % Region E
-            f = 1/2.*((cos(pi.*r.*(Dp-0.5)).*cos(pi.*r.*(1-Dy1)./2).*cos(pi.*r.*(1-Dy2)./2))./(r.*cos(pi.*r./2))-1./(r));
+            f = 1/(2*pi).*((cos(pi.*r.*(Dp-0.5)).*cos(pi.*r.*(1-Dy1)./2).*cos(pi.*r.*(1-Dy2)./2))./(r.*cos(pi.*r./2))-1./(r));
         % case 6
         %     % Region F
-        %     f = 1/2.*((sin(pi*r.*Dy1/2).*sin(pi*r.*(1-Dp)).*cos(pi*r.*(1-Dy2)/2))./(r.*cos(pi*r/2)));
+        %     f = 1/(2*pi).*((sin(pi*r.*Dy1/2).*sin(pi*r.*(1-Dp)).*cos(pi*r.*(1-Dy2)/2))./(r.*cos(pi*r/2)));
         % case 7
         %     % Region G
-        %     f = 1/2.*((sin(pi*r.*Dy2/2).*sin(pi*r.*(1-Dp)).*cos(pi*r.*(1-Dy1)/2))./(r.*cos(pi*r/2)));
+        %     f = 1/(2*pi).*((sin(pi*r.*Dy2/2).*sin(pi*r.*(1-Dp)).*cos(pi*r.*(1-Dy1)/2))./(r.*cos(pi*r/2)));
         % case 8
         %     % Region H
-        %     f = 1/(4).*(((cos(pi.*r.*(Dy2-Dy1)/2).*cos(pi.*r/2.*(2.*Dp-1)) + sin(pi.*r.*(Dy1+Dy2-1)/2).*sin(pi.*r.*(1-Dp)))./(r.*cos(pi.*r./2)) - 1./r));
+        %     f = 1/(4*pi).*(((cos(pi.*r.*(Dy2-Dy1)/2).*cos(pi.*r/2.*(2.*Dp-1)) + sin(pi.*r.*(Dy1+Dy2-1)/2).*sin(pi.*r.*(1-Dp)))./(r.*cos(pi.*r./2)) - 1./r));
         otherwise
             error('Unknown region');
     end
@@ -358,27 +326,8 @@ end
 
 % Define Irms function
 function g = g_function(DoF, vars, Vin, Vo)
-
-    % Dp = vars(1); Dy1 = vars(2); Dy2 = vars(3); r = 1/1.2;
-    if DoF >= 1
-        Dp = vars(1); Dy1 = 1; Dy2 = 1; r = 1/1.2;
-    end
-    if DoF >= 2
-        if (Vin>Vo)
-            Dy1 = vars(2);
-            Dy2 = 1;
-        else
-            Dy1 = 1;
-            Dy2 = vars(2);
-        end
-        r = 1/1.2;
-    end
-    if DoF >= 3
-        Dy1 = vars(2); Dy2 = vars(3); r = 1/1.2;
-    end
-    if DoF >= 4
-        r = vars(4);
-    end
+    % Get variables based on DoF
+    [Dp, Dy1, Dy2, r] = assign_variables(DoF, vars, Vin, Vo);
 
     region_flag((Dy1>Dy2) & (Dp<(Dy1-Dy2)/2)) = 1;  %  A
     region_flag((Dy2>=Dy1) & (Dp<(Dy2-Dy1)/2)) = 2;  %  B
@@ -424,27 +373,9 @@ end
 
 % Define constraint function for ZVS
 function [c, ceq] = zvs_function(DoF, vars, Vin, Vo, Z0)
-
-    % Dp = vars(1); Dy1 = vars(2); Dy2 = vars(3); r = 1/1.2;
-    if DoF >= 1
-        Dp = vars(1); Dy1 = 1; Dy2 = 1; r = 1/1.2;
-    end
-    if DoF >= 2
-        if (Vin>Vo)
-            Dy1 = vars(2);
-            Dy2 = 1;
-        else
-            Dy1 = 1;
-            Dy2 = vars(2);
-        end
-        r = 1/1.2;
-    end
-    if DoF >= 3
-        Dy1 = vars(2); Dy2 = vars(3); r = 1/1.2;
-    end
-    if DoF >= 4
-        r = vars(4);
-    end
+    % Get variables based on DoF
+    [Dp, Dy1, Dy2, r] = assign_variables(DoF, vars, Vin, Vo);
+    
 
     region_flag((Dy1>Dy2) & (Dp<(Dy1-Dy2)/2)) = 1;  %  A
     region_flag((Dy2>=Dy1) & (Dp<(Dy2-Dy1)/2)) = 2;  %  B
@@ -537,28 +468,10 @@ end
 
 % Define Ioff function
 function [Ip12, Is12, Ip34, Is34, ILmax] = h_function(DoF, vars, Vin, Vo)
-
     Z0 = 1;
-    % Dp = vars(1); Dy1 = vars(2); Dy2 = vars(3); r = 1/1.2;
-    if DoF >= 1
-        Dp = vars(1); Dy1 = 1; Dy2 = 1; r = 1/1.2;
-    end
-    if DoF >= 2
-        if (Vin>Vo)
-            Dy1 = vars(2);
-            Dy2 = 1;
-        else
-            Dy1 = 1;
-            Dy2 = vars(2);
-        end
-        r = 1/1.2;
-    end
-    if DoF >= 3
-        Dy1 = vars(2); Dy2 = vars(3); r = 1/1.2;
-    end
-    if DoF >= 4
-        r = vars(4);
-    end
+    % Get variables based on DoF
+    [Dp, Dy1, Dy2, r] = assign_variables(DoF, vars, Vin, Vo);
+    
 
     region_flag((Dy1>Dy2) & (Dp<(Dy1-Dy2)/2)) = 1;  %  A
     region_flag((Dy2>=Dy1) & (Dp<(Dy2-Dy1)/2)) = 2;  %  B
@@ -610,8 +523,8 @@ function [Ip12, Is12, Ip34, Is34, ILmax] = h_function(DoF, vars, Vin, Vo)
         I_zvs_p34_RegionH = ((sin(pi.*r).*(Vin + Vo.*cos((r.*pi.*(2.*Dp - Dy1 + Dy2 - 2))/2) - Vin.*cos(pi.*Dy1.*r) - Vo.*cos((r.*pi.*(Dy1 - 2.*Dp + Dy2 + 2))/2)))/Z0 + ((cos(pi.*r) + 1).*(Vo.*sin((r.*pi.*(2.*Dp - Dy1 + Dy2 - 2))/2) + Vin.*sin(pi.*Dy1.*r) + Vo.*sin((r.*pi.*(Dy1 - 2.*Dp + Dy2 + 2))/2)))/Z0)./(2.*(cos(pi.*r) + 1));
         I_zvs_s34_RegionH = -(((cos(pi.*r) + 1).*(Vin.*sin((r.*pi.*(2.*Dp - Dy1 + Dy2))/2) - Vin.*sin(pi.*r) + Vo.*sin(pi.*Dy2.*r) + Vin.*sin((r.*pi.*(2.*Dp + Dy1 + Dy2 - 2))/2)))/Z0 + (sin(pi.*r).*(Vin + Vo - Vin.*cos((r.*pi.*(2.*Dp - Dy1 + Dy2))/2) + Vin.*cos(pi.*r) - Vo.*cos(pi.*Dy2.*r) - Vin.*cos((r.*pi.*(2.*Dp + Dy1 + Dy2 - 2))/2)))/Z0)./(2.*(cos(pi.*r) + 1));
 
-        Imax2 = abs((Vin.^2.*cos(pi.*r.*(Dy1 - 1)) + Vo.^2.*cos(pi.*r.*(Dy2 - 1)) + Vin.^2 + Vo.^2 - Vin.*Vo.*cos((pi.*r.*(2.*Dp + Dy1 + Dy2 - 2))/2) - Vin.*Vo.*cos((pi.*r.*(2.*Dp + Dy1 - Dy2))/2) - Vin.*Vo.*cos((pi.*r.*(2.*Dp - Dy1 + Dy2))/2) - Vin.*Vo.*cos((pi.*r.*(2.*Dp - Dy1 - Dy2 + 2))/2))./(Z0.^2.*(cos(pi.*r) + 1)));
-        Imax1 = abs((2.*Vin.^2 - 2.*Vo.^2.*cos((Dy2.*pi.*r)/2).^2 - 2.*Vin.^2.*cos((Dy1.*pi.*r)/2).^2 + 2.*Vo.^2 + 4.*Vin.*Vo.*cos(pi.*r).*cos(Dp.*pi.*r).*sin((Dy1.*pi.*r)/2).*sin((Dy2.*pi.*r)/2) + 4.*Vin.*Vo.*sin(pi.*r).*sin(Dp.*pi.*r).*sin((Dy1.*pi.*r)/2).*sin((Dy2.*pi.*r)/2))./(Z0.^2.*(cos(pi.*r) + 1)));
+        Imax1 = abs((Vin.^2.*cos(pi.*r.*(Dy1 - 1)) + Vo.^2.*cos(pi.*r.*(Dy2 - 1)) + Vin.^2 + Vo.^2 - Vin.*Vo.*cos((pi.*r.*(2.*Dp + Dy1 + Dy2 - 2))/2) - Vin.*Vo.*cos((pi.*r.*(2.*Dp + Dy1 - Dy2))/2) - Vin.*Vo.*cos((pi.*r.*(2.*Dp - Dy1 + Dy2))/2) - Vin.*Vo.*cos((pi.*r.*(2.*Dp - Dy1 - Dy2 + 2))/2))./(Z0.^2.*(cos(pi.*r) + 1)));
+        Imax2 = abs((2.*Vin.^2 - 2.*Vo.^2.*cos((Dy2.*pi.*r)/2).^2 - 2.*Vin.^2.*cos((Dy1.*pi.*r)/2).^2 + 2.*Vo.^2 + 4.*Vin.*Vo.*cos(pi.*r).*cos(Dp.*pi.*r).*sin((Dy1.*pi.*r)/2).*sin((Dy2.*pi.*r)/2) + 4.*Vin.*Vo.*sin(pi.*r).*sin(Dp.*pi.*r).*sin((Dy1.*pi.*r)/2).*sin((Dy2.*pi.*r)/2))./(Z0.^2.*(cos(pi.*r) + 1)));
 
     % calulate objective function
     switch region_flag
