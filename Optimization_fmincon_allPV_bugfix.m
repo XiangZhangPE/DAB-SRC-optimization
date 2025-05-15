@@ -45,19 +45,27 @@ options = optimoptions('fmincon', ...
     'OptimalityTolerance', 2e-9, ...
     'StepTolerance', 1e-10);
 
-% Define the power ranges 
+% Define the power ranges and output votage ranges
 low_power_range = linspace(0.025, 0.45, 25);
 high_power_range = linspace(0.45, 1.2, 25);
 PoN_values = [low_power_range, high_power_range]; % Include both power ranges
-% Define the range for Vo
 Vo_values = 60:2.5:135; % Adjust the range as needed
+
 % Define different initial conditions for each region
 low_power_buck_initial = [0.012, 0.29, 0.38, 0.77];
-low_power_boost_initial = [0.012, 0.38, 0.29, 0.77];
 high_power_buck_initial = [0.19, 0.96, 1, 0.858];
+low_power_boost_initial = [0.012, 0.38, 0.29, 0.77];
 high_power_boost_initial = [0.175, 1, 1, 0.868];
 low_power_unity_initial = [0.003, 1, 1, 0.77];
 high_power_unity_initial = [0.07, 1, 1, 0.95];
+
+% low_power_buck_initial = [0.0259, 0.2315, 0.4178, 0.7692];
+% high_power_buck_initial =[0.2665, 0.7360, 1, 0.8349];
+% low_power_boost_initial =[0.0187, 0.4456, 0.3110, 0.7692];
+% high_power_boost_initial=[0.2166, 1, 0.8764, 0.8477];
+% low_power_unity_initial =[0.003, 1, 1, 0.77];
+% high_power_unity_initial=[0.07, 1, 1, 0.95];
+
 % 定义欧几里得距离的阈值
 distance_threshold = 0.02; % 两个点之间的最大允许距离
 
