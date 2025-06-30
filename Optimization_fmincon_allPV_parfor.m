@@ -46,7 +46,8 @@ options = optimoptions('fmincon', ...
     'StepTolerance', 1e-10);
 
 % Define the power ranges and output votage ranges
-low_power_range = linspace(0.025, 0.45, 25);
+% low_power_range = linspace(0.025, 0.45, 25);
+low_power_range = linspace(0.1, 0.45, 25);
 high_power_range = linspace(0.45, 1.2, 25);
 PoN_values = [low_power_range, high_power_range]; % Include both power ranges
 Vo_values = 60:2.5:135; % Adjust the range as needed
@@ -614,4 +615,80 @@ function [Ip12, Is12, Ip34, Is34, ILmax] = h_function(DoF, vars, Vin, Vo)
         otherwise
             error('Unknown region');
     end    
+end
+
+% 在parfor循环结束后，检测并替换突变点
+function [optimal_points, optimal_power, optimal_Irms, Ioffp12, Ioffp34, Ioffs12, Ioffs34, ILmax, actual_PoN_values] = ...
+    remove_outlier_points(optimal_points, optimal_power, optimal_Irms, Ioffp12, Ioffp34, Ioffs12, Ioffs34, ILmax, actual_PoN_values, Vin, Vo_values, DoF)
+    
+    % 首先处理无效点（值为0的点）
+    valid_indices = ~any(optimal_points == 0, 2);
+    
+    % 然后检测突变点
+    [m, ~, p] = size(optimal_points);
+    outlier_mask = false(size(optimal_points, 1), size(optimal_points, 3));
+    
+    % 定义突变阈值（根据实际数据调整）
+    threshold_dp = 0.05;
+    threshold_dy = 0.1;
+    threshold_r = 0.005;
+    
+    % 对每个Vo值检测
+    for v_idx = 1:p
+        % 对每个PoN值检测突变
+        for i = 2:m-1  % 跳过第一个和最后一个点
+            % 检查当前点与相邻点的差异
+            diff_prev = abs(optimal_points(i,:,v_idx) - optimal_points(i-1,:,v_idx));
+            diff_next = abs(optimal_points(i,:,v_idx) - optimal_points(i+1,:,v_idx));
+            
+            % 应用不同阈值到不同参数
+            thresholds = [threshold_dp, threshold_dy, threshold_dy];
+            if DoF >= 4
+                thresholds = [thresholds, threshold_r];
+            end
+            
+            % 如果差异过大，标记为突变点
+            if any(diff_prev > thresholds) && any(diff_next > thresholds)
+                outlier_mask(i, v_idx) = true;
+            end
+        end
+        
+        % 处理突变点 - 使用相邻点的平均值替换
+        for i = 2:m-1
+            if outlier_mask(i, v_idx)
+                % 查找前后有效的非突变点
+                prev_valid = max(1, i-1);
+                while prev_valid > 1 && (outlier_mask(prev_valid, v_idx) || ~valid_indices(prev_valid, v_idx))
+                    prev_valid = prev_valid - 1;
+                end
+                
+                next_valid = min(m, i+1);
+                while next_valid < m && (outlier_mask(next_valid, v_idx) || ~valid_indices(next_valid, v_idx))
+                    next_valid = next_valid + 1;
+                end
+                
+                % 确保找到了有效点
+                if valid_indices(prev_valid, v_idx) && valid_indices(next_valid, v_idx)
+                    % 线性插值替换突变点
+                    weight = (i - prev_valid) / (next_valid - prev_valid);
+                    interp_vars = (1-weight) * optimal_points(prev_valid,:,v_idx) + weight * optimal_points(next_valid,:,v_idx);
+                    
+                    % 更新所有相关值
+                    optimal_points(i,:,v_idx) = interp_vars;
+                    Vo = Vo_values(v_idx);
+                    
+                    % 使用插值参数重新计算物理量
+                    optimal_power(i,v_idx) = f_function(DoF, interp_vars, Vin, Vo);
+                    optimal_Irms(i,v_idx) = g_function(DoF, interp_vars, Vin, Vo);
+                    [Ip12_val, Ip34_val, Is12_val, Is34_val, ILmax_val] = h_function(DoF, interp_vars, Vin, Vo);
+                    Ioffp12(i,v_idx) = Ip34_val;
+                    Ioffp34(i,v_idx) = Ip12_val;
+                    Ioffs12(i,v_idx) = Is34_val;
+                    Ioffs34(i,v_idx) = Is12_val;
+                    ILmax(i,v_idx) = ILmax_val;
+                    actual_PoN_values(i,v_idx) = f_function(DoF, interp_vars, Vin, Vo);
+                end
+            end
+        end
+    end
 end
