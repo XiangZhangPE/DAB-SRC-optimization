@@ -605,7 +605,7 @@ function [optimal_points, optimal_power, optimal_Irms, Ioffp12, Ioffp34, Ioffs12
     % 定义突变阈值（根据实际数据调整）
     threshold_dp = 0.05;
     threshold_dy = 0.1;
-    threshold_r = 0.03;
+    threshold_r = 0.005;
     
     % 对每个Vo值检测
     for v_idx = 1:p

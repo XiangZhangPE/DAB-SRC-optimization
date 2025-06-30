@@ -1,0 +1,45 @@
+% Define g(Dy1, Dy2, Dp) function with penalty for PoN_target
+function g = g_function(vars, r, Vin, Vo, Z0)
+    Dy1 = vars(1);
+    Dy2 = vars(2);
+    Dp = vars(3);
+
+    region_flag((Dy1>Dy2) & (Dp<(Dy1-Dy2)/2)) = 1;  % 区域 A
+    region_flag((Dy2>=Dy1) & (Dp<(Dy2-Dy1)/2)) = 2;  % 区域 B
+    region_flag((Dp>=abs(Dy1-Dy2)/2) & (Dp<(Dy2+Dy1)/2) & (Dp<(1-(Dy2+Dy1)/2))) = 3;  % 区域 C
+    region_flag((((Dy2+Dy1)/2)<= Dp) & (Dp<(1-(Dy2+Dy1)/2))) = 4;  % 区域 D
+    region_flag(((1-(Dy2+Dy1)/2)<= Dp) & (((Dy2+Dy1)/2)>= Dp)) = 5;  % 区域 E
+    % region_flag(((1-(Dy2-Dy1)/2)<=Dp) & (Dy2>Dy1)) = 6;  % 区域 F
+    % region_flag(((1-(Dy1-Dy2)/2)<=Dp) & (Dy2<=Dy1)) = 7;  % 区域 G
+    % region_flag((Dp>=(1-(Dy1+Dy2)/2)) & (Dp>=(Dy1+Dy2)/2) & (Dp<(1-abs(Dy1-Dy2)/2))) = 8;  % 区域 H
+
+    % 原始目标函数计算
+    switch region_flag
+        case 1
+            % Region A
+            g = Z0./Vin.*sqrt((1/2/pi./r).*((2.*Vin.^2.*sin(pi.*r).*cos((Dy1.*pi.*r)./2).^2-Vo.^2.*sin(Dy2.*pi.*r)-2.*Vin.^2.*sin(pi.*r)-2.*Vo.^2.*sin(pi.*r)-Vin.^2.*sin(Dy1.*pi.*r)+2.*Vo.^2.*sin(pi.*r).*cos((Dy2.*pi.*r)./2).^2+2.*Vin.^2.*pi.*r+2.*Vo.^2.*pi.*r-Dy1.*Vin.^2.*pi.*r-Dy2.*Vo.^2.*pi.*r-2.*Vin.^2.*pi.*r.*cos((Dy1.*pi.*r)./2).^2-2.*Vo.^2.*pi.*r.*cos((Dy2.*pi.*r)./2).^2-2.*Vin.^2.*cos(pi.*r).*cos((Dy1.*pi.*r)./2).*sin((Dy1.*pi.*r)./2)-2.*Vo.^2.*cos(pi.*r).*cos((Dy2.*pi.*r)./2).*sin((Dy2.*pi.*r)./2)+2.*Dy1.*Vin.^2.*pi.*r.*cos((Dy1.*pi.*r)./2).^2+2.*Dy2.*Vo.^2.*pi.*r.*cos((Dy2.*pi.*r)./2).^2+4.*Vin.*Vo.*cos(Dp.*pi.*r).*cos((Dy1.*pi.*r)./2).*sin((Dy2.*pi.*r)./2)-Dy1.*Vin.^2.*pi.*r.*cos(pi.*r)-Dy2.*Vo.^2.*pi.*r.*cos(pi.*r)+2.*Dy1.*Vin.^2.*pi.*r.*cos(pi.*r).*cos((Dy1.*pi.*r)./2).^2+2.*Dy2.*Vo.^2.*pi.*r.*cos(pi.*r).*cos((Dy2.*pi.*r)./2).^2+4.*Vin.*Vo.*cos(pi.*r).*cos(Dp.*pi.*r).*cos((Dy1.*pi.*r)./2).*sin((Dy2.*pi.*r)./2)+4.*Vin.*Vo.*sin(pi.*r).*cos(Dp.*pi.*r).*sin((Dy1.*pi.*r)./2).*sin((Dy2.*pi.*r)./2)-4.*Vin.*Vo.*pi.*r.*cos(Dp.*pi.*r).*sin((Dy1.*pi.*r)./2).*sin((Dy2.*pi.*r)./2)+2.*Dy1.*Vin.^2.*pi.*r.*sin(pi.*r).*cos((Dy1.*pi.*r)./2).*sin((Dy1.*pi.*r)./2)+2.*Dy2.*Vo.^2.*pi.*r.*sin(pi.*r).*cos((Dy2.*pi.*r)./2).*sin((Dy2.*pi.*r)./2)+4.*Dp.*Vin.*Vo.*pi.*r.*cos((Dy1.*pi.*r)./2).*sin(Dp.*pi.*r).*sin((Dy2.*pi.*r)./2)+2.*Dy1.*Vin.*Vo.*pi.*r.*cos(Dp.*pi.*r).*sin((Dy1.*pi.*r)./2).*sin((Dy2.*pi.*r)./2)-2.*Dy2.*Vin.*Vo.*pi.*r.*cos(Dp.*pi.*r).*cos((Dy1.*pi.*r)./2).*cos((Dy2.*pi.*r)./2)-2.*Dy2.*Vin.*Vo.*pi.*r.*cos(pi.*r).*cos(Dp.*pi.*r).*cos((Dy1.*pi.*r)./2).*cos((Dy2.*pi.*r)./2)+4.*Dp.*Vin.*Vo.*pi.*r.*cos(pi.*r).*cos((Dy1.*pi.*r)./2).*sin(Dp.*pi.*r).*sin((Dy2.*pi.*r)./2)+2.*Dy1.*Vin.*Vo.*pi.*r.*cos(pi.*r).*cos(Dp.*pi.*r).*sin((Dy1.*pi.*r)./2).*sin((Dy2.*pi.*r)./2)-2.*Dy1.*Vin.*Vo.*pi.*r.*sin(pi.*r).*cos(Dp.*pi.*r).*cos((Dy1.*pi.*r)./2).*sin((Dy2.*pi.*r)./2)-2.*Dy2.*Vin.*Vo.*pi.*r.*sin(pi.*r).*cos(Dp.*pi.*r).*cos((Dy2.*pi.*r)./2).*sin((Dy1.*pi.*r)./2)+4.*Dp.*Vin.*Vo.*pi.*r.*sin(pi.*r).*sin(Dp.*pi.*r).*sin((Dy1.*pi.*r)./2).*sin((Dy2.*pi.*r)./2))./(2.*Z0.^2.*(cos(pi.*r)+1))));
+        case 2
+            % Region B
+            g = Z0./Vin.*sqrt((1/2/pi./r).*((2.*Vin.^2.*sin(pi.*r).*cos((Dy1.*pi.*r)./2).^2 - Vo.^2.*sin(Dy2.*pi.*r) - 2.*Vin.^2.*sin(pi.*r) - 2.*Vo.^2.*sin(pi.*r) - Vin.^2.*sin(Dy1.*pi.*r) + 2.*Vo.^2.*sin(pi.*r).*cos((Dy2.*pi.*r)./2).^2 + 2.*Vin.^2.*pi.*r + 2.*Vo.^2.*pi.*r - Dy1.*Vin.^2.*pi.*r - Dy2.*Vo.^2.*pi.*r - 2.*Vin.^2.*pi.*r.*cos((Dy1.*pi.*r)./2).^2 - 2.*Vo.^2.*pi.*r.*cos((Dy2.*pi.*r)./2).^2 - 2.*Vin.^2.*cos(pi.*r).*cos((Dy1.*pi.*r)./2).*sin((Dy1.*pi.*r)./2) - 2.*Vo.^2.*cos(pi.*r).*cos((Dy2.*pi.*r)./2).*sin((Dy2.*pi.*r)./2) + 2.*Dy1.*Vin.^2.*pi.*r.*cos((Dy1.*pi.*r)./2).^2 + 2.*Dy2.*Vo.^2.*pi.*r.*cos((Dy2.*pi.*r)./2).^2 + 4.*Vin.*Vo.*cos(Dp.*pi.*r).*cos((Dy2.*pi.*r)./2).*sin((Dy1.*pi.*r)./2) - Dy1.*Vin.^2.*pi.*r.*cos(pi.*r) - Dy2.*Vo.^2.*pi.*r.*cos(pi.*r) + 2.*Dy1.*Vin.^2.*pi.*r.*cos(pi.*r).*cos((Dy1.*pi.*r)./2).^2 + 2.*Dy2.*Vo.^2.*pi.*r.*cos(pi.*r).*cos((Dy2.*pi.*r)./2).^2 + 4.*Vin.*Vo.*cos(pi.*r).*cos(Dp.*pi.*r).*cos((Dy2.*pi.*r)./2).*sin((Dy1.*pi.*r)./2) + 4.*Vin.*Vo.*sin(pi.*r).*cos(Dp.*pi.*r).*sin((Dy1.*pi.*r)./2).*sin((Dy2.*pi.*r)./2) - 4.*Vin.*Vo.*pi.*r.*cos(Dp.*pi.*r).*sin((Dy1.*pi.*r)./2).*sin((Dy2.*pi.*r)./2) + 2.*Dy1.*Vin.^2.*pi.*r.*sin(pi.*r).*cos((Dy1.*pi.*r)./2).*sin((Dy1.*pi.*r)./2) + 2.*Dy2.*Vo.^2.*pi.*r.*sin(pi.*r).*cos((Dy2.*pi.*r)./2).*sin((Dy2.*pi.*r)./2) + 4.*Dp.*Vin.*Vo.*pi.*r.*cos((Dy2.*pi.*r)./2).*sin(Dp.*pi.*r).*sin((Dy1.*pi.*r)./2) + 2.*Dy2.*Vin.*Vo.*pi.*r.*cos(Dp.*pi.*r).*sin((Dy1.*pi.*r)./2).*sin((Dy2.*pi.*r)./2) - 2.*Dy1.*Vin.*Vo.*pi.*r.*cos(Dp.*pi.*r).*cos((Dy1.*pi.*r)./2).*cos((Dy2.*pi.*r)./2) - 2.*Dy1.*Vin.*Vo.*pi.*r.*cos(pi.*r).*cos(Dp.*pi.*r).*cos((Dy1.*pi.*r)./2).*cos((Dy2.*pi.*r)./2) + 4.*Dp.*Vin.*Vo.*pi.*r.*cos(pi.*r).*cos((Dy2.*pi.*r)./2).*sin(Dp.*pi.*r).*sin((Dy1.*pi.*r)./2) - 2.*Dy1.*Vin.*Vo.*pi.*r.*sin(pi.*r).*cos(Dp.*pi.*r).*cos((Dy1.*pi.*r)./2).*sin((Dy2.*pi.*r)./2) + 2.*Dy2.*Vin.*Vo.*pi.*r.*cos(pi.*r).*cos(Dp.*pi.*r).*sin((Dy1.*pi.*r)./2).*sin((Dy2.*pi.*r)./2) - 2.*Dy2.*Vin.*Vo.*pi.*r.*sin(pi.*r).*cos(Dp.*pi.*r).*cos((Dy2.*pi.*r)./2).*sin((Dy1.*pi.*r)./2) + 4.*Dp.*Vin.*Vo.*pi.*r.*sin(pi.*r).*sin(Dp.*pi.*r).*sin((Dy1.*pi.*r)./2).*sin((Dy2.*pi.*r)./2))./(2.*Z0.^2.*(cos(pi.*r) + 1))));
+        case 3
+            % Region C
+            g = 0;
+        case 4
+            % Region D
+            g = 0;
+        case 5
+            % Region E
+            g = Z0/Vin*((1/2/pi/r)*(-(2*Vin^2*sin(Dy1*pi*r) + 2*Vo^2*sin(Dy2*pi*r) + 2*Vin^2*sin(pi*r*(Dy1 - 1)) + 2*Vo^2*sin(pi*r*(Dy2 - 1)) + 2*Vin^2*sin(pi*r) + 2*Vo^2*sin(pi*r) + 2*Vin*Vo*sin((pi*r*(2*Dp - Dy1 - Dy2 + 2))/2) - 2*Vin*Vo*sin((pi*r*(Dy1 - 2*Dp + Dy2))/2) + 2*Vin*Vo*sin((pi*r*(2*Dp + Dy1 + Dy2 - 2))/2) + 2*Vin*Vo*sin((pi*r*(2*Dp + Dy1 + Dy2 - 4))/2) + 2*Vin*Vo*sin((pi*r*(2*Dp + Dy1 - Dy2))/2) + 2*Vin*Vo*sin((pi*r*(2*Dp - Dy1 + Dy2))/2) + 2*Vin*Vo*sin((pi*r*(2*Dp + Dy1 - Dy2 - 2))/2) + 2*Vin*Vo*sin((pi*r*(2*Dp - Dy1 + Dy2 - 2))/2) - 2*Vin^2*pi*r - 2*Vo^2*pi*r + 2*Vin^2*pi*r*cos(Dy1*pi*r) + 2*Vo^2*pi*r*cos(Dy2*pi*r) - 2*Vin*Vo*pi*r*cos((pi*r*(Dy1 - 2*Dp + Dy2))/2) + 4*Vin*Vo*pi*r*cos((pi*r*(2*Dp + Dy1 + Dy2 - 2))/2) + 2*Vin*Vo*pi*r*cos((pi*r*(2*Dp + Dy1 + Dy2 - 4))/2) - 2*Dy1*Vin^2*pi*r*cos(Dy1*pi*r) - 2*Dy2*Vo^2*pi*r*cos(Dy2*pi*r) + 2*Vin*Vo*pi*r*cos((pi*r*(2*Dp + Dy1 - Dy2))/2) + 2*Vin*Vo*pi*r*cos((pi*r*(2*Dp - Dy1 + Dy2))/2) - 2*Dy1*Vin^2*pi*r*cos(pi*r*(Dy1 - 1)) - 2*Dy2*Vo^2*pi*r*cos(pi*r*(Dy2 - 1)) - 2*Dp*Vin*Vo*pi*r*cos((pi*r*(2*Dp - Dy1 - Dy2 + 2))/2) + Dy1*Vin*Vo*pi*r*cos((pi*r*(2*Dp - Dy1 - Dy2 + 2))/2) + Dy2*Vin*Vo*pi*r*cos((pi*r*(2*Dp - Dy1 - Dy2 + 2))/2) - 2*Dp*Vin*Vo*pi*r*cos((pi*r*(Dy1 - 2*Dp + Dy2))/2) - 2*Dp*Vin*Vo*pi*r*cos((pi*r*(2*Dp + Dy1 + Dy2 - 2))/2) - 2*Dp*Vin*Vo*pi*r*cos((pi*r*(2*Dp + Dy1 + Dy2 - 4))/2) + Dy1*Vin*Vo*pi*r*cos((pi*r*(Dy1 - 2*Dp + Dy2))/2) + Dy2*Vin*Vo*pi*r*cos((pi*r*(Dy1 - 2*Dp + Dy2))/2) - Dy1*Vin*Vo*pi*r*cos((pi*r*(2*Dp + Dy1 + Dy2 - 2))/2) - Dy2*Vin*Vo*pi*r*cos((pi*r*(2*Dp + Dy1 + Dy2 - 2))/2) - Dy1*Vin*Vo*pi*r*cos((pi*r*(2*Dp + Dy1 + Dy2 - 4))/2) - Dy2*Vin*Vo*pi*r*cos((pi*r*(2*Dp + Dy1 + Dy2 - 4))/2))/(4*Z0^2*(cos(pi*r) + 1))));
+        % case 6
+        %     % Region F
+        %     g = ... % Add the specific formula for region F
+        % case 7
+        %     % Region G
+        %     g = ... % Add the specific formula for region G
+        % case 8
+        %     % Region H
+        %     g = ... % Add the specific formula for region H
+        otherwise
+            error('Unknown region');
+    end
+end

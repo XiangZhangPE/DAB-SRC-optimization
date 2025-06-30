@@ -52,19 +52,19 @@ PoN_values = [low_power_range, high_power_range]; % Include both power ranges
 Vo_values = 60:2.5:135; % Adjust the range as needed
 
 % Define different initial conditions for each region
-% low_power_buck_initial = [0.012, 0.29, 0.38, 0.77];
-% high_power_buck_initial = [0.19, 0.96, 1, 0.858];
-% low_power_boost_initial = [0.012, 0.38, 0.29, 0.77];
-% high_power_boost_initial = [0.175, 1, 1, 0.868];
-% low_power_unity_initial = [0.003, 1, 1, 0.77];
-% high_power_unity_initial = [0.07, 1, 1, 0.95];
+low_power_buck_initial = [0.012, 0.29, 0.38, 0.77];
+high_power_buck_initial = [0.19, 0.96, 1, 0.858];
+low_power_boost_initial = [0.012, 0.38, 0.29, 0.77];
+high_power_boost_initial = [0.175, 1, 1, 0.868];
+low_power_unity_initial = [0.003, 1, 1, 0.77];
+high_power_unity_initial = [0.07, 1, 1, 0.95];
 
-low_power_buck_initial = [0.0259, 0.2315, 0.4178, 0.7692];
-high_power_buck_initial =[0.2665, 0.7360, 1, 0.8349];
-low_power_boost_initial =[0.0187, 0.4456, 0.3110, 0.7692];
-high_power_boost_initial=[0.2166, 1, 0.8764, 0.8477];
-low_power_unity_initial =[0.003, 1, 1, 0.77];
-high_power_unity_initial=[0.07, 1, 1, 0.95];
+% low_power_buck_initial = [0.0259, 0.2315, 0.4178, 0.7692];
+% high_power_buck_initial =[0.2665, 0.7360, 1, 0.8349];
+% low_power_boost_initial =[0.0187, 0.4456, 0.3110, 0.7692];
+% high_power_boost_initial=[0.2166, 1, 0.8764, 0.8477];
+% low_power_unity_initial =[0.003, 1, 1, 0.77];
+% high_power_unity_initial=[0.07, 1, 1, 0.95];
 
 % 定义欧几里得距离的阈值
 distance_threshold = 0.02; % 两个点之间的最大允许距离
@@ -77,7 +77,7 @@ Ioffp12 = zeros(length(PoN_values), length(Vo_values));
 Ioffp34 = zeros(length(PoN_values), length(Vo_values));
 Ioffs12 = zeros(length(PoN_values), length(Vo_values));
 Ioffs34 = zeros(length(PoN_values), length(Vo_values));
-ILmax = zeros(length(PoN_values), length(Vo_values));
+ILpk = zeros(length(PoN_values), length(Vo_values));
 actual_PoN_values = zeros(length(PoN_values), length(Vo_values));
 
 % Use parfor to parallelize the Vo loop
@@ -92,7 +92,7 @@ parfor v_idx = 1:length(Vo_values)
     local_Ioffp34 = zeros(length(PoN_values), 1);
     local_Ioffs12 = zeros(length(PoN_values), 1);
     local_Ioffs34 = zeros(length(PoN_values), 1);
-    local_ILmax = zeros(length(PoN_values), 1);
+    local_ILpk = zeros(length(PoN_values), 1);
     local_actual_PoN_values = zeros(length(PoN_values), 1);
 
     % Determine initial conditions based on Vo
@@ -141,12 +141,12 @@ parfor v_idx = 1:length(Vo_values)
         local_optimal_points(i, :) = optimal_vars;
         local_optimal_power(i) = f_function(DoF, optimal_vars, Vin, Vo);
         local_optimal_Irms(i) = g_function(DoF, optimal_vars, Vin, Vo);
-        [Ip12_val, Ip34_val, Is12_val, Is34_val, ILmax_val] = h_function(DoF, optimal_vars, Vin, Vo);
+        [Ip12_val, Ip34_val, Is12_val, Is34_val, ILpk_val] = h_function(DoF, optimal_vars, Vin, Vo);
         local_Ioffp12(i) = Ip34_val;
         local_Ioffp34(i) = Ip12_val;
         local_Ioffs12(i) = Is34_val;
         local_Ioffs34(i) = Is12_val;
-        local_ILmax(i) = ILmax_val;
+        local_ILpk(i) = ILpk_val;
         local_actual_PoN_values(i) = f_function(DoF, optimal_vars, Vin, Vo);
 
         % Update initial guesses for the next iteration
@@ -162,58 +162,16 @@ parfor v_idx = 1:length(Vo_values)
     Ioffp34(:, v_idx) = local_Ioffp34;
     Ioffs12(:, v_idx) = local_Ioffs12;
     Ioffs34(:, v_idx) = local_Ioffs34;
-    ILmax(:, v_idx) = local_ILmax;
+    ILpk(:, v_idx) = local_ILpk;
     actual_PoN_values(:, v_idx) = local_actual_PoN_values;
 end
 
-% % 大循环结束后，剔除包含 0 元素的点
-% % 找到所有有效点的索引（optimal_points 中不包含 0 的点）
-% valid_indices = all(optimal_points ~= 0, 2); % 检查每个点是否所有维度都不为 0
+% parfor循环完成后调用
+[optimal_points, optimal_power, optimal_Irms, Ioffp12, Ioffp34, Ioffs12, Ioffs34, ILpk, actual_PoN_values] = ...
+    remove_outlier_points(optimal_points, optimal_power, optimal_Irms, Ioffp12, Ioffp34, Ioffs12, Ioffs34, ILpk, actual_PoN_values, Vin, Vo_values, DoF);
 
-% % 将无效点设置为 NaN，保持数组维度一致
-% optimal_points(~valid_indices, :, :) = NaN;
-% optimal_power(~valid_indices, :) = NaN;
-% optimal_Irms(~valid_indices, :) = NaN;
-% Ioffp12(~valid_indices, :) = NaN;
-% Ioffp34(~valid_indices, :) = NaN;
-% Ioffs12(~valid_indices, :) = NaN;
-% Ioffs34(~valid_indices, :) = NaN;
-% ILmax(~valid_indices, :) = NaN;
-% actual_PoN_values(~valid_indices, :) = NaN;
-
-% 大循环结束后，剔除 optimal_points 中包含 0 元素的点
-% 找到所有包含 0 元素的点
-invalid_points = false(size(optimal_points, 1), size(optimal_points, 3));
-for v_idx = 1:length(Vo_values)
-    for i = 1:length(PoN_values)
-        % 检查当前点的每个元素是否有 0
-        if any(optimal_points(i, :, v_idx) == 0)
-            invalid_points(i, v_idx) = true;
-        end
-    end
-end
-
-% 将无效点设置为 NaN，保持数组维度一致
-for v_idx = 1:length(Vo_values)
-    for i = 1:length(PoN_values)
-        if invalid_points(i, v_idx)
-            optimal_points(i, :, v_idx) = NaN;
-            optimal_power(i, v_idx) = NaN;
-            optimal_Irms(i, v_idx) = NaN;
-            Ioffp12(i, v_idx) = NaN;
-            Ioffp34(i, v_idx) = NaN;
-            Ioffs12(i, v_idx) = NaN;
-            Ioffs34(i, v_idx) = NaN;
-            ILmax(i, v_idx) = NaN;
-            actual_PoN_values(i, v_idx) = NaN;
-        end
-    end
-end
-
-% 重新生成网格，使用实际的 actual_PoN_values
-[PoN_grid, Vo_grid] = meshgrid(mean(actual_PoN_values, 2, 'omitnan'), Vo_values / Vin);
-
-% 确保绘图时忽略 NaN 值
+% 然后生成网格和绘图
+[PoN_grid, Vo_grid] = meshgrid(PoN_values, Vo_values / Vin);
 
 % Figure 1: Normalized turn-off current
 figure(1);
@@ -222,7 +180,7 @@ mesh(PoN_grid, Vo_grid, Ioffp12', 'FaceColor', 'r', 'EdgeColor', [0.3 0.3 0.3], 
 mesh(PoN_grid, Vo_grid, Ioffp34', 'FaceColor', 'b', 'EdgeColor', [0.3 0.3 0.3], 'EdgeAlpha', 0.3,  'FaceAlpha', 0.4, 'DisplayName', 'I_{off,P34}');
 mesh(PoN_grid, Vo_grid, Ioffs12', 'FaceColor', 'm', 'EdgeColor', [0.3 0.3 0.3], 'EdgeAlpha', 0.3,  'FaceAlpha', 0.4, 'DisplayName', 'I_{off,S12}');
 mesh(PoN_grid, Vo_grid, Ioffs34', 'FaceColor', 'c', 'EdgeColor', [0.3 0.3 0.3], 'EdgeAlpha', 0.3,  'FaceAlpha', 0.2, 'DisplayName', 'I_{off,S34}');
-mesh(PoN_grid, Vo_grid, ILmax', 'FaceColor', 'y', 'EdgeColor', [0.3 0.3 0.3], 'EdgeAlpha', 0.1,  'DisplayName', 'I_{L,max}');
+mesh(PoN_grid, Vo_grid, ILpk', 'FaceColor', 'y', 'EdgeColor', [0.3 0.3 0.3], 'EdgeAlpha', 0.1,  'DisplayName', 'I_{L,max}');
 xlabel('Normalized power PoN = Pout/PN', 'Interpreter', 'latex');
 ylabel('Voltage ratio M = Vo/Vin', 'Interpreter', 'latex');
 zlabel('Normalized turn-off current', 'Interpreter', 'latex');
@@ -522,7 +480,7 @@ function [c, ceq] = zvs_function(DoF, vars, Vin, Vo, Z0)
 end
 
 % Define Ioff function
-function [Ip12, Is12, Ip34, Is34, ILmax] = h_function(DoF, vars, Vin, Vo)
+function [Ip12, Is12, Ip34, Is34, ILpk] = h_function(DoF, vars, Vin, Vo)
     Z0 = 1;
     % Get variables based on DoF
     [Dp, Dy1, Dy2, r] = assign_variables(DoF, vars, Vin, Vo);
@@ -578,8 +536,8 @@ function [Ip12, Is12, Ip34, Is34, ILmax] = h_function(DoF, vars, Vin, Vo)
         % I_zvs_p34_RegionH = ((sin(pi.*r).*(Vin + Vo.*cos((r.*pi.*(2.*Dp - Dy1 + Dy2 - 2))/2) - Vin.*cos(pi.*Dy1.*r) - Vo.*cos((r.*pi.*(Dy1 - 2.*Dp + Dy2 + 2))/2)))/Z0 + ((cos(pi.*r) + 1).*(Vo.*sin((r.*pi.*(2.*Dp - Dy1 + Dy2 - 2))/2) + Vin.*sin(pi.*Dy1.*r) + Vo.*sin((r.*pi.*(Dy1 - 2.*Dp + Dy2 + 2))/2)))/Z0)./(2.*(cos(pi.*r) + 1));
         % I_zvs_s34_RegionH = -(((cos(pi.*r) + 1).*(Vin.*sin((r.*pi.*(2.*Dp - Dy1 + Dy2))/2) - Vin.*sin(pi.*r) + Vo.*sin(pi.*Dy2.*r) + Vin.*sin((r.*pi.*(2.*Dp + Dy1 + Dy2 - 2))/2)))/Z0 + (sin(pi.*r).*(Vin + Vo - Vin.*cos((r.*pi.*(2.*Dp - Dy1 + Dy2))/2) + Vin.*cos(pi.*r) - Vo.*cos(pi.*Dy2.*r) - Vin.*cos((r.*pi.*(2.*Dp + Dy1 + Dy2 - 2))/2)))/Z0)./(2.*(cos(pi.*r) + 1));
 
-        Imax1 = abs((Vin.^2.*cos(pi.*r.*(Dy1 - 1)) + Vo.^2.*cos(pi.*r.*(Dy2 - 1)) + Vin.^2 + Vo.^2 - Vin.*Vo.*cos((pi.*r.*(2.*Dp + Dy1 + Dy2 - 2))/2) - Vin.*Vo.*cos((pi.*r.*(2.*Dp + Dy1 - Dy2))/2) - Vin.*Vo.*cos((pi.*r.*(2.*Dp - Dy1 + Dy2))/2) - Vin.*Vo.*cos((pi.*r.*(2.*Dp - Dy1 - Dy2 + 2))/2))./(Z0.^2.*(cos(pi.*r) + 1)));
-        Imax2 = abs((2.*Vin.^2 - 2.*Vo.^2.*cos((Dy2.*pi.*r)/2).^2 - 2.*Vin.^2.*cos((Dy1.*pi.*r)/2).^2 + 2.*Vo.^2 + 4.*Vin.*Vo.*cos(pi.*r).*cos(Dp.*pi.*r).*sin((Dy1.*pi.*r)/2).*sin((Dy2.*pi.*r)/2) + 4.*Vin.*Vo.*sin(pi.*r).*sin(Dp.*pi.*r).*sin((Dy1.*pi.*r)/2).*sin((Dy2.*pi.*r)/2))./(Z0.^2.*(cos(pi.*r) + 1)));
+        Ipk1 = abs((Vin.^2.*cos(pi.*r.*(Dy1 - 1)) + Vo.^2.*cos(pi.*r.*(Dy2 - 1)) + Vin.^2 + Vo.^2 - Vin.*Vo.*cos((pi.*r.*(2.*Dp + Dy1 + Dy2 - 2))/2) - Vin.*Vo.*cos((pi.*r.*(2.*Dp + Dy1 - Dy2))/2) - Vin.*Vo.*cos((pi.*r.*(2.*Dp - Dy1 + Dy2))/2) - Vin.*Vo.*cos((pi.*r.*(2.*Dp - Dy1 - Dy2 + 2))/2))./(Z0.^2.*(cos(pi.*r) + 1)));
+        Ipk2 = abs((2.*Vin.^2 - 2.*Vo.^2.*cos((Dy2.*pi.*r)/2).^2 - 2.*Vin.^2.*cos((Dy1.*pi.*r)/2).^2 + 2.*Vo.^2 + 4.*Vin.*Vo.*cos(pi.*r).*cos(Dp.*pi.*r).*sin((Dy1.*pi.*r)/2).*sin((Dy2.*pi.*r)/2) + 4.*Vin.*Vo.*sin(pi.*r).*sin(Dp.*pi.*r).*sin((Dy1.*pi.*r)/2).*sin((Dy2.*pi.*r)/2))./(Z0.^2.*(cos(pi.*r) + 1)));
 
     % calulate objective function
     switch region_flag
@@ -589,35 +547,35 @@ function [Ip12, Is12, Ip34, Is34, ILmax] = h_function(DoF, vars, Vin, Vo)
             Is12 = abs(I_zvs_s12_RegionA)/Vin;  
             Ip34 = abs(I_zvs_p34_RegionA)/Vin;
             Is34 = abs(I_zvs_s34_RegionA)/Vin;
-            ILmax = sqrt(Imax1)/Vin;
+            ILpk = sqrt(Ipk1)/Vin;
         case 2
             % Region B
             Ip12 = abs(I_zvs_p12_RegionB)/Vin;
             Is12 = abs(I_zvs_s12_RegionB)/Vin;
             Ip34 = abs(I_zvs_p34_RegionB)/Vin;
             Is34 = abs(I_zvs_s34_RegionB)/Vin;
-            ILmax = sqrt(Imax1)/Vin;
+            ILpk = sqrt(Ipk1)/Vin;
         case 3
             % Region C
             Ip12 = abs(I_zvs_p12_RegionC)/Vin;
             Is12 = abs(I_zvs_s12_RegionC)/Vin;
             Ip34 = abs(I_zvs_p34_RegionC)/Vin;
             Is34 = abs(I_zvs_s34_RegionC)/Vin;
-            ILmax = sqrt(Imax1)/Vin;
+            ILpk = sqrt(Ipk1)/Vin;
         case 4
             % Region D
             Ip12 = abs(I_zvs_p12_RegionD)/Vin;
             Is12 = abs(I_zvs_s12_RegionD)/Vin;
             Ip34 = abs(I_zvs_p34_RegionD)/Vin;
             Is34 = abs(I_zvs_s34_RegionD)/Vin;
-            ILmax = sqrt(Imax1)/Vin;
+            ILpk = sqrt(Ipk1)/Vin;
         case 5
             % Region E
             Ip12 = abs(I_zvs_p12_RegionE)/Vin;
             Is12 = abs(I_zvs_s12_RegionE)/Vin;
             Ip34 = abs(I_zvs_p34_RegionE)/Vin;
             Is34 = abs(I_zvs_s34_RegionE)/Vin;
-            ILmax = sqrt(Imax1)/Vin;
+            ILpk = sqrt(Ipk1)/Vin;
         % case 6
         %     % Region F
         %     h = -(((cos(pi.*r) + 1).*(Vo.*sin((r.*pi.*(2.*Dp - Dy1 + Dy2 - 4))/2) + Vo.*sin(pi.*r) - Vin.*sin(pi.*Dy1.*r) - Vo.*sin((r.*pi.*(Dy1 - 2.*Dp + Dy2 + 2))/2)))/Z0 - (sin(pi.*r).*(Vin + Vo - Vo.*cos((r.*pi.*(2.*Dp - Dy1 + Dy2 - 4))/2) + Vo.*cos(pi.*r) - Vin.*cos(pi.*Dy1.*r) - Vo.*cos((r.*pi.*(Dy1 - 2.*Dp + Dy2 + 2))/2)))/Z0)./(2.*(cos(pi.*r) + 1));
@@ -630,4 +588,141 @@ function [Ip12, Is12, Ip34, Is34, ILmax] = h_function(DoF, vars, Vin, Vo)
         otherwise
             error('Unknown region');
     end    
+end
+
+
+function [optimal_points, optimal_power, optimal_Irms, Ioffp12, Ioffp34, Ioffs12, Ioffs34, ILpk, actual_PoN_values] = ...
+    remove_outlier_points(optimal_points, optimal_power, optimal_Irms, Ioffp12, Ioffp34, Ioffs12, Ioffs34, ILpk, actual_PoN_values, Vin, Vo_values, DoF)
+    
+    [m, ~, p] = size(optimal_points);
+    points_to_fix = false(m, p);
+    
+    % 1. 先标记所有需要修复的点：包括含0元素的点和突变点
+    for v_idx = 1:p
+        % 标记含0元素的无效点
+        invalid_points = any(optimal_points(:,:,v_idx) == 0, 2);
+        points_to_fix(:,v_idx) = invalid_points;
+        
+        % 定义突变阈值
+        threshold_dp = 0.05;
+        threshold_dy = 0.1;
+        threshold_r = 0.003;
+        
+        % 边缘点使用更严格的阈值
+        edge_factor = 0.6;
+        edge_threshold_dp = threshold_dp * edge_factor;
+        edge_threshold_dy = threshold_dy * edge_factor;
+        edge_threshold_r = threshold_r * edge_factor;
+        
+        % 设置阈值数组
+        thresholds = [threshold_dp, threshold_dy, threshold_dy];
+        edge_thresholds = [edge_threshold_dp, edge_threshold_dy, edge_threshold_dy];
+        if DoF >= 4
+            thresholds = [thresholds, threshold_r];
+            edge_thresholds = [edge_thresholds, edge_threshold_r];
+        end
+        
+        % 获取所有有效点的索引（不含0元素）
+        valid_idx = find(~invalid_points);
+        
+        if length(valid_idx) < 3
+            continue; % 如果有效点不足3个，跳过突变检测
+        end
+        
+        % 检测突变点
+        for i = 1:length(valid_idx)
+            idx = valid_idx(i);
+            
+            % 处理边缘点（第一个和最后一个有效点）
+            if i == 1 || i == length(valid_idx)
+                if i == 1 && length(valid_idx) >= 3
+                    % 第一个有效点
+                    diff1 = abs(optimal_points(idx,:,v_idx) - optimal_points(valid_idx(2),:,v_idx));
+                    diff2 = abs(optimal_points(idx,:,v_idx) - optimal_points(valid_idx(3),:,v_idx));
+                    if any(diff1 > edge_thresholds) && any(diff2 > edge_thresholds)
+                        points_to_fix(idx,v_idx) = true;
+                    end
+                elseif i == length(valid_idx) && length(valid_idx) >= 3
+                    % 最后一个有效点
+                    diff1 = abs(optimal_points(idx,:,v_idx) - optimal_points(valid_idx(end-1),:,v_idx));
+                    diff2 = abs(optimal_points(idx,:,v_idx) - optimal_points(valid_idx(end-2),:,v_idx));
+                    if any(diff1 > edge_thresholds) && any(diff2 > edge_thresholds)
+                        points_to_fix(idx,v_idx) = true;
+                    end
+                end
+            else
+                % 中间点
+                prev_idx = valid_idx(i-1);
+                next_idx = valid_idx(i+1);
+                
+                diff_prev = abs(optimal_points(idx,:,v_idx) - optimal_points(prev_idx,:,v_idx));
+                diff_next = abs(optimal_points(idx,:,v_idx) - optimal_points(next_idx,:,v_idx));
+                
+                if any(diff_prev > thresholds) && any(diff_next > thresholds)
+                    points_to_fix(idx,v_idx) = true;
+                end
+            end
+        end
+    end
+    
+    % 2. 修复所有标记的点
+    for v_idx = 1:p
+        Vo = Vo_values(v_idx);
+        fix_indices = find(points_to_fix(:,v_idx));
+        
+        if isempty(fix_indices)
+            continue;
+        end
+        
+        % 获取当前Vo下所有有效点的索引
+        valid_indices = find(~points_to_fix(:,v_idx));
+        
+        if isempty(valid_indices)
+            continue; % 如果没有有效点，跳过
+        end
+        
+        % 对每个需要修复的点进行处理
+        for i = 1:length(fix_indices)
+            idx = fix_indices(i);
+            
+            % 寻找最近的有效点
+            [~, nearest_idx] = min(abs(valid_indices - idx));
+            
+            if nearest_idx == 1
+                % 如果最近的点是第一个有效点
+                optimal_points(idx,:,v_idx) = optimal_points(valid_indices(nearest_idx),:,v_idx);
+            elseif nearest_idx == length(valid_indices)
+                % 如果最近的点是最后一个有效点
+                optimal_points(idx,:,v_idx) = optimal_points(valid_indices(nearest_idx),:,v_idx);
+            else
+                % 如果最近的点是中间点，确定是使用前一个还是后一个点进行插值
+                if idx < valid_indices(nearest_idx)
+                    prev_idx = valid_indices(nearest_idx-1);
+                    next_idx = valid_indices(nearest_idx);
+                else
+                    prev_idx = valid_indices(nearest_idx);
+                    next_idx = valid_indices(nearest_idx+1);
+                end
+                
+                % 线性插值
+                weight = (idx - prev_idx) / (next_idx - prev_idx);
+                weight = max(0, min(1, weight)); % 确保权重在[0,1]范围内
+                optimal_points(idx,:,v_idx) = (1-weight) * optimal_points(prev_idx,:,v_idx) + weight * optimal_points(next_idx,:,v_idx);
+            end
+            
+            % 更新所有相关的计算值
+            interp_vars = optimal_points(idx,:,v_idx);
+            
+            % 使用新参数重新计算物理量
+            optimal_power(idx,v_idx) = f_function(DoF, interp_vars, Vin, Vo);
+            optimal_Irms(idx,v_idx) = g_function(DoF, interp_vars, Vin, Vo);
+            [Ip12_val, Is12_val, Ip34_val, Is34_val, ILpk_val] = h_function(DoF, interp_vars, Vin, Vo);
+            Ioffp12(idx,v_idx) = Ip12_val;
+            Ioffp34(idx,v_idx) = Ip34_val;
+            Ioffs12(idx,v_idx) = Is12_val;
+            Ioffs34(idx,v_idx) = Is34_val;
+            ILpk(idx,v_idx) = ILpk_val;
+            actual_PoN_values(idx,v_idx) = f_function(DoF, interp_vars, Vin, Vo);
+        end
+    end
 end
