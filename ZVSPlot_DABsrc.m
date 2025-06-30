@@ -265,8 +265,8 @@ switch plotoptions
     % else
     %     warning('PoN_vals 为空或取值范围过小，跳过 caxis 设置');
     end
-    % colormap("parula");  % 选择颜色映射 (jet, parula, hot, etc.)
-    colormap(nclCM(177));  % 选择颜色映射 (jet, parula, hot, etc.)
+    colormap("parula");  % 选择颜色映射 (jet, parula, hot, etc.)
+    % colormap(nclCM(177));  % 选择颜色映射 (jet, parula, hot, etc.)
     colorbar;  % 添加颜色条
 
 

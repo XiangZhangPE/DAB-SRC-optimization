@@ -369,10 +369,11 @@ function g2 = g2_function(DoF, vars, Vin, Vo)
 
     % calulate objective function
     if region_flag<=4
-        g2 = (2*abs(Vo.^2.*(cos(pi.*r.*(1-Dy2)/2)).^2+Vin.^2.*(cos(pi.*r.*(1-Dy1)/2)).^2-2.*Vin.*Vo.*cos(pi.*r.*(Dp)).*cos(pi.*r.*(1-Dy1)/2).*cos(pi.*r.*(1-Dy2)/2)))./(Z0.^2.*(cos(pi.*r) + 1));
+        Imax_2 = (2*abs(Vo.^2.*(cos(pi.*r.*(1-Dy2)/2)).^2+Vin.^2.*(cos(pi.*r.*(1-Dy1)/2)).^2-2.*Vin.*Vo.*cos(pi.*r.*(Dp)).*cos(pi.*r.*(1-Dy1)/2).*cos(pi.*r.*(1-Dy2)/2)))./(Z0.^2.*(cos(pi.*r) + 1));
     else
-        g2 = (2*abs(Vo.^2.*(sin(pi.*r.*(Dy2)/2)).^2+Vin.^2.*(sin(pi.*r.*(Dy1)/2)).^2 + 2.*Vin.*Vo.*cos(pi.*r.*(1+Dp)).*sin(pi.*r.*(Dy1)/2).*sin(pi.*r.*(Dy2)/2)))./(Z0.^2.*(cos(pi.*r) + 1));
+        Imax_2 = (2*abs(Vo.^2.*(sin(pi.*r.*(Dy2)/2)).^2+Vin.^2.*(sin(pi.*r.*(Dy1)/2)).^2 + 2.*Vin.*Vo.*cos(pi.*r.*(1+Dp)).*sin(pi.*r.*(Dy1)/2).*sin(pi.*r.*(Dy2)/2)))./(Z0.^2.*(cos(pi.*r) + 1));
     end
+    g2 = sqrt(Imax_2)/Vin;
 end
 
 
